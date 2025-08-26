@@ -1,36 +1,53 @@
 import struct
 
-# 9.75
-print(struct.unpack(">f", bytes([0b01000001, 0b00011100, 0x00, 0x00]))[0])
+BYTE_SIZE = 8
 
-# 6.49
-print(struct.unpack(">f", bytes([0b01000000, 0b11001111, 0b10101110, 0b00000000]))[0])
 
-# 110 = 6
+def conceal(msg):
+    if len(msg) > 6:
+        raise ValueError("Message greater than 6 bytes.")
 
-# Mantissa 110.0111110101110
-# Mantissa 1.100111110101110
+    msg_bits = "".join([format(ord(char), "08b") for char in msg])
+    nan_byte = 0b01111111
+    float_bytes = [nan_byte]
+    next_byte = []
 
-# 10011111010111000010100
+    for bit in msg_bits:
+        next_byte.append(int(bit))
+        if len(next_byte) == BYTE_SIZE:
+            float_bytes.append(int("".join(str(b) for b in next_byte), 2))
+            next_byte = []
 
-# 0.49 = 0.98
-# 0.98 = 1.96
-# 0.96 = 1.92
-# 0.92 = 1.84
-# 0.84 = 1.68
-# 0.68 = 1.36
-# 0.36 = 0.72
-# 0.72 = 1,44
-# 0.44 = 0.88
-# 0.88 = 1.76
-# 0.76 = 1.52
-# 0.52 = 1.04
-# .04 = 0.8
+    if next_byte:
+        while len(next_byte) < BYTE_SIZE:
+            next_byte.append(0)
+        float_bytes.append(int("".join(str(b) for b in next_byte), 2))
 
-# 0.16
-# 0.32
-# 0.64
-# 0.128
-# 0.256
-# 0.512
-# 0.0
+    while len(float_bytes) < 8:
+        float_bytes.append(0)
+
+    return struct.unpack(">d", bytes(float_bytes))[0]
+
+
+def extract(float_64_bits):
+    buf = struct.pack(">d", float_64_bits)
+
+    msg_bytes = buf[1:]
+
+    bits = "".join(f"{byte:08b}" for byte in msg_bytes)
+
+    chars = []
+    for i in range(0, len(bits), BYTE_SIZE):
+        byte_bits = bits[i : i + BYTE_SIZE]
+        if len(byte_bits) < BYTE_SIZE:
+            break
+        byte_val = int(byte_bits, 2)
+        if byte_val == 0:
+            break
+        chars.append(chr(byte_val))
+
+    return "".join(chars)
+
+
+sneaky_nan_float = conceal("hello!")
+print(f"message: {extract(sneaky_nan_float)} | type: {type(sneaky_nan_float)}")
