@@ -1,25 +1,13 @@
 from struct import pack
 
-
-def little_endian(byte_string):
-    n = 0
-    for i, b in enumerate(byte_string):
-        n += b << (i * 8)
-    return n
-
-
 with open("stretch-goal.bmp", "rb") as f:
     data = f.read()
 
+offset = int.from_bytes(data[10:14], "little")
+width = int.from_bytes(data[18:22], "little")
+height = int.from_bytes(data[22:26], "little")
 
-pixels = []
-
-offset = little_endian(data[10:14])
-width = little_endian(data[18:22])
-height = little_endian(data[22:26])
-
-new_width = height
-new_height = width
+new_width, new_height = height, width
 
 data = bytearray(data)
 
@@ -27,6 +15,8 @@ data[18:22] = pack("<I", new_width)
 data[22:26] = pack("<I", new_height)
 
 row_size = (width * 3 + 3) & ~3
+
+pixels = []
 
 for y in range(new_height):
     for x in range(new_width):
