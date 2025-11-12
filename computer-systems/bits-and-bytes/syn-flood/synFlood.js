@@ -1,47 +1,91 @@
-const { open } = require('node:fs/promises');
-
+const { open } = require("node:fs/promises");
+const assert = require("node:assert/strict");
 
 const FILE_HEADER_LEN = 24;
 const PACKET_HEADER_LEN = 16;
 
 async function synFlood() {
   try {
-    const f = await open('./synflood.pcap', 'r');
-    const fh = Buffer.alloc(FILE_HEADER_LEN);
-    let isLE = false;
+    const f = await open("./synflood.pcap", "r");
+    const fileHeaderBuf = Buffer.alloc(FILE_HEADER_LEN);
 
-    await f.read(fh, 0, FILE_HEADER_LEN, 0);
+    await f.read(fileHeaderBuf, 0, FILE_HEADER_LEN, 0);
 
-    const magic = fh.readUInt32BE(0);
+    // is little endian
+    const magic = fileHeaderBuf.readUInt32BE(0);
+    assert.equal(magic, 0xd4c3b2a1);
 
-    isLE = magic === 0xd4c3b2a1 || magic === 0x4d3cb2a1;
+    const snaplen = fileHeaderBuf.readUint32LE(16);
+    const linkLayerHeaderType = fileHeaderBuf.readUint32LE(20);
 
-    let cursor = FILE_HEADER_LEN;
+    // is loopback interface
+    assert.equal(linkLayerHeaderType, 0);
+
+    // read all packets
     let packetIndex = 0;
-    const snaplen = isLE ? fh.readUint32LE(16) : fh.readUint32BE(16);
-    const pheader = Buffer.alloc(PACKET_HEADER_LEN);
-    const databuf = Buffer.alloc(snaplen);
-    
-    while (true) {
-      const { bytesRead: _pheader } = await f.read(pheader, 0, PACKET_HEADER_LEN, cursor);
-      if (_pheader === 0) break;
+    let cursor = FILE_HEADER_LEN;
+    let initiated = 0;
+    let acked = 0;
 
-      const datalen = isLE ? pheader.readUInt32LE(8) : pheader.readUInt32BE(8);
+    while (true) {
+      const { bytesRead: packetHeader, buffer: perPacketHeaderBuf } =
+        await f.read(
+          Buffer.alloc(PACKET_HEADER_LEN),
+          0,
+          PACKET_HEADER_LEN,
+          cursor
+        );
+
+      if (packetHeader === 0) break;
+
+      const datalen = perPacketHeaderBuf.readUInt32LE(8);
 
       cursor += PACKET_HEADER_LEN;
 
-      const { bytesRead: rawData } = await f.read(databuf, 0, datalen, cursor);
-      if (rawData === 0) break;
+      const { bytesRead: packetData, buffer: packetDatabuf } = await f.read(
+        Buffer.alloc(snaplen),
+        0,
+        datalen,
+        cursor
+      );
+
+      if (packetData === 0) break;
+
+      // is IPv4
+      assert.equal(packetDatabuf.readUInt32LE(0), 2);
+
+      // no option
+      const ihl = (packetDatabuf.readUInt32LE(4) & 0x0f) << 2;
+
+      assert.equal(ihl, 20);
+
+      const flags = packetDatabuf.readUInt16BE(4 + ihl + 12);
+      const src = packetDatabuf.readUInt16BE(4 + ihl);
+      const dest = packetDatabuf.readUInt16BE(4 + ihl + 2);
+      const syn = (flags & 0x0002) > 0;
+      const ack = (flags & 0x0010) > 0;
+
+      if (dest == 80 && syn) initiated++;
+      if (src == 80 && ack) acked++;
+
+      // console.log(
+      //   `${src} -> ${dest} ${(syn && "SYN ") || ""}${(ack && "ACK") || ""}`
+      // );
 
       cursor += datalen;
       packetIndex++;
     }
 
-    console.log('Done. Total packets read:', packetIndex);
+    console.log(
+      `${packetIndex} packets parsed ${initiated} connections, ${acked} acked. ${(
+        (acked / initiated) *
+        100
+      ).toFixed(2)} % acked`
+    );
 
     await f.close();
   } catch (err) {
-    console.error(err.message);
+    console.error(err);
   }
 }
 
