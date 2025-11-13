@@ -17,6 +17,5 @@ with open("./cases", "rb") as f:
             break
 
         n = line[0]
-        sys.stdout.buffer.write(string(n))
         s = line[1:-1]
         sys.stdout.buffer.write(truncate(s, n) + b"\n")
