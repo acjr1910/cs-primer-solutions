@@ -3,28 +3,67 @@
 
 #define STARTING_BUCKETS 8
 
+typedef struct HashmapItem
+{
+  const char *key;
+  void *value;
+} HashmapItem;
+
 typedef struct Hashmap
 {
+  int length;
   int capacity;
-  void **items;
+  HashmapItem *items;
 } Hashmap;
 
 Hashmap *Hashmap_new()
 {
   Hashmap *hashmap = malloc(sizeof(Hashmap));
 
+  hashmap->length = 0;
   hashmap->capacity = STARTING_BUCKETS;
-  hashmap->items = malloc(sizeof(void *) * STARTING_BUCKETS);
+  hashmap->items = calloc(STARTING_BUCKETS, sizeof(HashmapItem));
 
   return hashmap;
 }
 
+unsigned int Hashmap_hash(const char *s)
+{
+  // FNV-1a
+  unsigned int hash = 2166136261u;
+
+  while (*s)
+  {
+    hash ^= (unsigned char)(*s++);
+    hash *= 16777619u;
+  }
+
+  return hash;
+}
+
+void Hashmap_resize(Hashmap *h)
+{
+  h->capacity = h->capacity * 2;
+}
+
 int Hashmap_set(Hashmap *hashmap, const char *key, void *value)
 {
-  // TODO
-  // 1 - execute hash fn and get the key pos;
-  // 2 - if empty, store value;
-  // 3 - if not empty, increase hashmap capacity and go to step 1
+  if (hashmap->length > hashmap->capacity / 2)
+  {
+    Hashmap_resize(hashmap);
+  }
+
+  unsigned int hash = Hashmap_hash(key);
+
+  int i = hash % hashmap->capacity;
+
+  while (hashmap->items[i].key != NULL)
+  {
+    i++;
+  }
+
+  hashmap->items[i].key = key;
+  hashmap->items[i].value = value;
 }
 
 int Hashmap_get() {}
