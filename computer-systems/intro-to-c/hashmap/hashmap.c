@@ -1,7 +1,10 @@
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define STARTING_BUCKETS 8
+#define MAX_KEY_SIZE 16
 
 typedef struct HashmapItem
 {
@@ -46,31 +49,69 @@ void Hashmap_resize(Hashmap *h)
   h->capacity = h->capacity * 2;
 }
 
-int Hashmap_set(Hashmap *hashmap, const char *key, void *value)
+void Hashmap_set(Hashmap *h, const char *key, void *value)
 {
-  if (hashmap->length > hashmap->capacity / 2)
+  if (h->length > h->capacity / 2)
   {
-    Hashmap_resize(hashmap);
+    Hashmap_resize(h);
   }
 
   unsigned int hash = Hashmap_hash(key);
 
-  int i = hash % hashmap->capacity;
+  int i = hash % h->capacity;
 
-  while (hashmap->items[i].key != NULL)
+  while (i < h->capacity && h->items[i].key != NULL && strcmp(h->items[i].key, key) != 0)
   {
     i++;
   }
 
-  hashmap->items[i].key = key;
-  hashmap->items[i].value = value;
+  char *key_copy = malloc(strlen(key) + 1);
+  strcpy(key_copy, key);
+
+  h->items[i].key = key_copy;
+  h->items[i].value = value;
 }
 
-int Hashmap_get() {}
+void *Hashmap_get(Hashmap *h, const char *key)
+{
 
-int Hashmap_delete() {}
+  unsigned int hash = Hashmap_hash(key);
 
-int Hashmap_free() {}
+  int i = hash % h->capacity;
+
+  while (i < h->capacity && h->items[i].key != NULL && strcmp(h->items[i].key, key) != 0)
+  {
+    i++;
+  }
+
+  if (i == h->capacity || h->items[i].key == NULL)
+    return NULL;
+
+  return h->items[i].value;
+}
+
+void Hashmap_delete(Hashmap *h, const char *key)
+{
+  unsigned int hash = Hashmap_hash(key);
+
+  int i = hash % h->capacity;
+
+  while (i < h->capacity && h->items[i].key != NULL && strcmp(h->items[i].key, key) != 0)
+  {
+    i++;
+  }
+
+  if (h->items[i].key != NULL)
+  {
+    h->items[i].key = NULL;
+    h->items[i].value = NULL;
+  };
+}
+
+void Hashmap_free(Hashmap *h)
+{
+  free(h);
+}
 
 int main()
 {
@@ -110,16 +151,6 @@ int main()
   }
 
   Hashmap_free(h);
-  /*
-     stretch goals:
-     - expand the underlying array if we start to get a lot of collisions
-     - support non-string keys
-     - try different hash functions
-     - switch from chaining to open addressing
-     - use a sophisticated rehashing scheme to avoid clustered collisions
-     - implement some features from Python dicts, such as reducing space use,
-     maintaing key ordering etc. see https://www.youtube.com/watch?v=npw4s1QTmPg
-     for ideas
-     */
+
   printf("ok\n");
 }
