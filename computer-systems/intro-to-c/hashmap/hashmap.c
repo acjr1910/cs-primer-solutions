@@ -8,7 +8,7 @@
 
 typedef struct HashmapItem
 {
-  const char *key;
+  char *key;
   void *value;
 } HashmapItem;
 
@@ -30,7 +30,7 @@ Hashmap *Hashmap_new()
   return hashmap;
 }
 
-unsigned int Hashmap_hash(const char *s)
+unsigned int Hashmap_hash(char *s)
 {
   // FNV-1a
   unsigned int hash = 2166136261u;
@@ -44,26 +44,35 @@ unsigned int Hashmap_hash(const char *s)
   return hash;
 }
 
+int Hashmap_probe(Hashmap *h, char *key, unsigned int hash)
+{
+  int i = hash % h->capacity;
+  int start = i;
+
+  while (i < h->capacity && h->items[i].key != NULL && strcmp(h->items[i].key, key) != 0)
+  {
+    i = (i + 1) % h->capacity;
+    if (i == start)
+      return -1;
+  }
+
+  return i;
+}
+
 void Hashmap_resize(Hashmap *h)
 {
   h->capacity = h->capacity * 2;
+  h->items = realloc(h->items, sizeof(HashmapItem) * h->capacity);
 }
 
-void Hashmap_set(Hashmap *h, const char *key, void *value)
+void Hashmap_set(Hashmap *h, char *key, void *value)
 {
   if (h->length > h->capacity / 2)
   {
     Hashmap_resize(h);
   }
 
-  unsigned int hash = Hashmap_hash(key);
-
-  int i = hash % h->capacity;
-
-  while (i < h->capacity && h->items[i].key != NULL && strcmp(h->items[i].key, key) != 0)
-  {
-    i++;
-  }
+  int i = Hashmap_probe(h, key, Hashmap_hash(key));
 
   char *key_copy = malloc(strlen(key) + 1);
   strcpy(key_copy, key);
@@ -72,17 +81,9 @@ void Hashmap_set(Hashmap *h, const char *key, void *value)
   h->items[i].value = value;
 }
 
-void *Hashmap_get(Hashmap *h, const char *key)
+void *Hashmap_get(Hashmap *h, char *key)
 {
-
-  unsigned int hash = Hashmap_hash(key);
-
-  int i = hash % h->capacity;
-
-  while (i < h->capacity && h->items[i].key != NULL && strcmp(h->items[i].key, key) != 0)
-  {
-    i++;
-  }
+  int i = Hashmap_probe(h, key, Hashmap_hash(key));
 
   if (i == h->capacity || h->items[i].key == NULL)
     return NULL;
@@ -90,19 +91,13 @@ void *Hashmap_get(Hashmap *h, const char *key)
   return h->items[i].value;
 }
 
-void Hashmap_delete(Hashmap *h, const char *key)
+void Hashmap_delete(Hashmap *h, char *key)
 {
-  unsigned int hash = Hashmap_hash(key);
+  int i = Hashmap_probe(h, key, Hashmap_hash(key));
 
-  int i = hash % h->capacity;
-
-  while (i < h->capacity && h->items[i].key != NULL && strcmp(h->items[i].key, key) != 0)
+  if (i > -1)
   {
-    i++;
-  }
-
-  if (h->items[i].key != NULL)
-  {
+    free(h->items[i].key);
     h->items[i].key = NULL;
     h->items[i].value = NULL;
   };
@@ -110,6 +105,7 @@ void Hashmap_delete(Hashmap *h, const char *key)
 
 void Hashmap_free(Hashmap *h)
 {
+  free(h->items);
   free(h);
 }
 
@@ -147,6 +143,12 @@ int main()
   for (i = 0; i < n; i++)
   {
     sprintf(key, "item %d", i);
+    void *result = Hashmap_get(h, key);
+    if (result != &ns[i])
+    {
+      printf("Error: Hashmap_get failed for key '%s' (expected %p, got %p)\n", key, (void *)&ns[i], result);
+      break;
+    }
     assert(Hashmap_get(h, key) == &ns[i]);
   }
 
