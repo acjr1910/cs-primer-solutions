@@ -19,6 +19,8 @@ typedef struct Hashmap
   HashmapItem *items;
 } Hashmap;
 
+void Hashmap_set(Hashmap *h, char *key, void *value);
+
 Hashmap *Hashmap_new()
 {
   Hashmap *hashmap = malloc(sizeof(Hashmap));
@@ -30,7 +32,7 @@ Hashmap *Hashmap_new()
   return hashmap;
 }
 
-unsigned int Hashmap_hash(char *s)
+unsigned int Hashmap_hash_key(char *s)
 {
   // FNV-1a
   unsigned int hash = 2166136261u;
@@ -44,7 +46,7 @@ unsigned int Hashmap_hash(char *s)
   return hash;
 }
 
-int Hashmap_probe(Hashmap *h, char *key, unsigned int hash)
+int Hashmap_find_index(Hashmap *h, char *key, unsigned int hash)
 {
   int i = hash % h->capacity;
   int start = i;
@@ -61,8 +63,22 @@ int Hashmap_probe(Hashmap *h, char *key, unsigned int hash)
 
 void Hashmap_resize(Hashmap *h)
 {
-  h->capacity = h->capacity * 2;
-  h->items = realloc(h->items, sizeof(HashmapItem) * h->capacity);
+  int prev_capacity = h->capacity;
+  HashmapItem *prev_items = h->items;
+
+  h->capacity *= 2;
+  h->items = calloc(h->capacity, sizeof(HashmapItem));
+  h->length = 0;
+
+  for (int i = 0; i < prev_capacity; i++)
+  {
+    if (prev_items[i].key != NULL)
+    {
+      Hashmap_set(h, prev_items[i].key, prev_items[i].value);
+    }
+  }
+
+  free(prev_items);
 }
 
 void Hashmap_set(Hashmap *h, char *key, void *value)
@@ -72,18 +88,19 @@ void Hashmap_set(Hashmap *h, char *key, void *value)
     Hashmap_resize(h);
   }
 
-  int i = Hashmap_probe(h, key, Hashmap_hash(key));
+  int i = Hashmap_find_index(h, key, Hashmap_hash_key(key));
 
   char *key_copy = malloc(strlen(key) + 1);
   strcpy(key_copy, key);
 
+  h->length++;
   h->items[i].key = key_copy;
   h->items[i].value = value;
 }
 
 void *Hashmap_get(Hashmap *h, char *key)
 {
-  int i = Hashmap_probe(h, key, Hashmap_hash(key));
+  int i = Hashmap_find_index(h, key, Hashmap_hash_key(key));
 
   if (i == h->capacity || h->items[i].key == NULL)
     return NULL;
@@ -93,11 +110,12 @@ void *Hashmap_get(Hashmap *h, char *key)
 
 void Hashmap_delete(Hashmap *h, char *key)
 {
-  int i = Hashmap_probe(h, key, Hashmap_hash(key));
+  int i = Hashmap_find_index(h, key, Hashmap_hash_key(key));
 
   if (i > -1)
   {
     free(h->items[i].key);
+    h->length--;
     h->items[i].key = NULL;
     h->items[i].value = NULL;
   };
