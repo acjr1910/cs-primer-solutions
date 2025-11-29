@@ -6,6 +6,8 @@
 #define STARTING_BUCKETS 8
 #define MAX_KEY_SIZE 16
 
+static char *TOMBSTONE = (char *)1;
+
 typedef struct HashmapItem
 {
   char *key;
@@ -51,8 +53,10 @@ int Hashmap_find_index(Hashmap *h, char *key, unsigned int hash)
   int i = hash % h->capacity;
   int start = i;
 
-  while (i < h->capacity && h->items[i].key != NULL && strcmp(h->items[i].key, key) != 0)
+  while (h->items[i].key != NULL)
   {
+    if (h->items[i].key != TOMBSTONE && strcmp(h->items[i].key, key) == 0)
+      return i;
     i = (i + 1) % h->capacity;
     if (i == start)
       return -1;
@@ -72,7 +76,7 @@ void Hashmap_resize(Hashmap *h)
 
   for (int i = 0; i < prev_capacity; i++)
   {
-    if (prev_items[i].key != NULL)
+    if (prev_items[i].key != NULL && prev_items[i].key != TOMBSTONE)
     {
       Hashmap_set(h, prev_items[i].key, prev_items[i].value);
     }
@@ -112,17 +116,24 @@ void Hashmap_delete(Hashmap *h, char *key)
 {
   int i = Hashmap_find_index(h, key, Hashmap_hash_key(key));
 
-  if (i > -1)
+  if (i != -1 && h->items[i].key != NULL && h->items[i].key != TOMBSTONE)
   {
     free(h->items[i].key);
     h->length--;
-    h->items[i].key = NULL;
+    h->items[i].key = TOMBSTONE;
     h->items[i].value = NULL;
   };
 }
 
 void Hashmap_free(Hashmap *h)
 {
+  for (int i = 0; i < h->capacity; i++)
+  {
+    if (h->items[i].key != NULL && h->items[i].key != TOMBSTONE)
+    {
+      free(h->items[i].key);
+    }
+  }
   free(h->items);
   free(h);
 }
